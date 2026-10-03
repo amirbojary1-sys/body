@@ -46,10 +46,11 @@ final class Auth
     public static function user(): ?array
     {
         if (!isset($_SESSION['user_id'])) return null;
-        $stmt = Database::connection()->prepare('SELECT id, name, email, created_at FROM users WHERE id = ?');
+        $stmt = Database::connection()->prepare('SELECT id, name, email, is_active, created_at FROM users WHERE id = ?');
         $stmt->execute([(int) $_SESSION['user_id']]);
         $u = $stmt->fetch();
-        if (!$u) { unset($_SESSION['user_id']); return null; }
+        // A suspended account also loses its already-established sessions.
+        if (!$u || (int) $u['is_active'] !== 1) { unset($_SESSION['user_id']); return null; }
         return ['id' => (int) $u['id'], 'name' => $u['name'], 'email' => $u['email'], 'createdAt' => (int) $u['created_at']];
     }
     public static function requireUser(bool $checkAccount = true): array
@@ -94,7 +95,8 @@ final class Auth
             $stmt = $pdo->prepare('INSERT INTO users(email, name, password_hash, created_at) VALUES(?, ?, ?, ?)');
             $stmt->execute([$email, $name, $hash, Http::now()]);
             $id = (int) $pdo->lastInsertId();
-            $pdo->prepare('INSERT INTO user_states(user_id, updated_at) VALUES(?, ?)')->execute([$id, Http::now()]);
+            $pdo->prepare('INSERT INTO user_states(user_id, data, updated_at) VALUES(?, ?, ?)')->execute([$id, 'null', Http::now()]);
+            $pdo->prepare('UPDATE users SET last_login_at = ? WHERE id = ?')->execute([Http::now(), $id]);
             $pdo->commit();
         } catch (\PDOException $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -112,16 +114,19 @@ final class Auth
         $password = is_string($body['password'] ?? null) ? $body['password'] : '';
         if (strlen($password) > 72) throw new ApiException(401, 'ایمیل یا رمز عبور درست نیست.', 'invalid_credentials');
         $pdo = Database::connection();
-        $stmt = $pdo->prepare('SELECT id, password_hash FROM users WHERE email = ?');
+        $stmt = $pdo->prepare('SELECT id, password_hash, is_active FROM users WHERE email = ?');
         $stmt->execute([$email]);
         $row = $stmt->fetch();
         // A dummy hash avoids a fast path that reveals whether an email exists.
         $dummy = '$2y$12$6XzGiYPWhgmIu6LMOglQnOnFWcikCSnbFXh5raBRRlzrYZaNI1IU6';
         $valid = password_verify($password, $row['password_hash'] ?? $dummy);
         if (!$row || !$valid) throw new ApiException(401, 'ایمیل یا رمز عبور درست نیست.', 'invalid_credentials');
-        if (password_needs_rehash($row['password_hash'], PASSWORD_DEFAULT)) {
-            $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($password, PASSWORD_DEFAULT), $row['id']]);
+        if ((int) ($row['is_active'] ?? 1) !== 1) throw new ApiException(403, 'این حساب موقتاً توسط مدیر سایت غیرفعال شده است. با پشتیبانی تماس بگیر.', 'account_suspended');
+        $hash = $row['password_hash'];
+        if (password_needs_rehash($hash, PASSWORD_DEFAULT)) {
+            $hash = password_hash($password, PASSWORD_DEFAULT);
         }
+        $pdo->prepare('UPDATE users SET password_hash = ?, last_login_at = ? WHERE id = ?')->execute([$hash, Http::now(), $row['id']]);
         return self::identity($row);
     }
     public static function logout(): array

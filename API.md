@@ -55,7 +55,7 @@ A new account has `state: null`, `revision: 0`. Guest-state transfer is an indep
 {"email":"you@example.com","password":"your-own-long-password"}
 ```
 
-Returns `user`, `csrf`, `state`, `revision`, `updatedAt`. Passwords are 10+ characters for registration, capped at 72 bytes for bcrypt safety. Email verification and email password recovery are not implemented.
+Returns `user`, `csrf`, `state`, `revision`, `updatedAt`. Passwords are 10+ characters for registration, capped at 72 bytes for bcrypt safety. Email verification and email password recovery are not implemented. A successful login also updates `last_login_at`; an account suspended from the admin panel is rejected with **403** `account_suspended`.
 
 ### Save snapshot
 
@@ -136,7 +136,7 @@ Possible action types: `planner`, `calculator`, `nutrition`, `progress`, `log_wa
 Errors have `error` (user-facing message) and `code`.
 
 - **401**: authentication required or invalid credentials.
-- **403**: origin rejected.
+- **403**: origin rejected, or the account is suspended (`account_suspended`).
 - **405**: incorrect HTTP method.
 - **409**: state revision conflict / browser account mismatch.
 - **413**: body or snapshot too large.
