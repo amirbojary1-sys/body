@@ -1,0 +1,30 @@
+{
+  "coordinator": {
+    "name": "هماهنگ‌کننده",
+    "title": "ایجنت هماهنگ‌کننده",
+    "sub": "یک نقشه، برای همه هدف‌ها",
+    "icon": "spark",
+    "color": "orange"
+  },
+  "trainer": {
+    "name": "مربی تمرین",
+    "title": "ایجنت تمرین",
+    "sub": "تمرین متناسب با امکانات تو",
+    "icon": "dumbbell",
+    "color": "blue"
+  },
+  "nutrition": {
+    "name": "راهنمای تغذیه",
+    "title": "ایجنت تغذیه",
+    "sub": "کالری، ماکرو و انتخاب وعده",
+    "icon": "leaf",
+    "color": "green"
+  },
+  "recovery": {
+    "name": "همراه ریکاوری",
+    "title": "ایجنت ریکاوری",
+    "sub": "استراحت، خواب و استمرار",
+    "icon": "moon",
+    "color": "violet"
+  }
+}

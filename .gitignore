@@ -1,0 +1,8 @@
+.env
+/storage/*
+!/storage/.gitkeep
+/vendor/
+/node_modules/
+*.log
+*.zip
+/tests/.runtime-*/

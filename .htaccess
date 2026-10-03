@@ -1,0 +1,10 @@
+# Defence in depth if the project folder itself is accidentally under a web root.
+# Recommended: set DocumentRoot directly to the public/ directory.
+Options -Indexes
+<FilesMatch "(^\.|\.sqlite($|-)|\.env|\.json$|\.md$|\.log$|router\.php$)">
+    Require all denied
+</FilesMatch>
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(app|storage|templates|tests)(/|$) - [F,L]
+</IfModule>
