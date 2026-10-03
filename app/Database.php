@@ -7,7 +7,7 @@ use PDO;
  * Database layer. Two drivers, one API:
  *   - mysql : set DB_DRIVER=mysql (+ DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS) in .env
  *   - sqlite: default, zero-config, storage/fitbot.sqlite
- * Import database/fitbot_mysql.sql into MySQL, or let the schema auto-create
+ * Import database/qmtfpupd_fitbot.sql into MySQL, or let the schema auto-create
  * (the MySQL account then needs CREATE privileges).
  */
 final class Database
@@ -46,7 +46,7 @@ final class Database
         try {
             $pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]);
         } catch (\PDOException $e) {
-            throw new \RuntimeException('اتصال به MySQL برقرار نشد («' . $e->getMessage() . '»). مقادیر DB_HOST/DB_NAME/DB_USER/DB_PASS در فایل .env و روشن‌بودن سرویس MySQL را بررسی کن و مطمئن شو فایل database/fitbot_mysql.sql ایمپورت شده است.');
+            throw new \RuntimeException('اتصال به MySQL برقرار نشد («' . $e->getMessage() . '»). مقادیر DB_HOST/DB_NAME/DB_USER/DB_PASS در فایل .env و روشن‌بودن سرویس MySQL را بررسی کن و مطمئن شو فایل database/qmtfpupd_fitbot.sql ایمپورت شده است.');
         }
         try {
             self::mysqlSchema($pdo);
@@ -62,7 +62,7 @@ final class Database
                 $pdo->query('SELECT branch_id FROM users LIMIT 1');
                 error_log('FitBot schema bootstrap skipped after PDO error: ' . $e->getMessage());
             } catch (\PDOException) {
-                throw new \RuntimeException('جدول‌های دیتابیس در MySQL پیدا نشدند و ساختن خودکار آن‌ها ممکن نبود («' . $e->getMessage() . '»). فایل database/fitbot_mysql.sql (نسخه جدید پلتفرم) را با phpMyAdmin یا دستور mysql ایمپورت کن یا به کاربر MySQL مجوز CREATE بده.');
+                throw new \RuntimeException('جدول‌های دیتابیس در MySQL پیدا نشدند و ساختن خودکار آن‌ها ممکن نبود («' . $e->getMessage() . '»). فایل database/qmtfpupd_fitbot.sql (نسخه جدید پلتفرم) را با phpMyAdmin یا دستور mysql ایمپورت کن یا به کاربر MySQL مجوز CREATE بده.');
             }
         }
         return $pdo;
