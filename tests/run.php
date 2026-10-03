@@ -3,6 +3,7 @@ declare(strict_types=1);
 // Pure PHP tests; no Node.js, Composer or web server needed.
 $storage = __DIR__ . '/.runtime-' . bin2hex(random_bytes(5));
 putenv('STORAGE_PATH=' . $storage);
+putenv('DB_DRIVER=sqlite'); // tests always run on a throwaway SQLite database
 require dirname(__DIR__) . '/app/bootstrap.php';
 use FitBot\{ApiException, AgentService, Database, FitnessService, StateValidator};
 $checks = 0;
@@ -58,7 +59,7 @@ try {
     $hash = password_hash('Example-Test-Password', PASSWORD_DEFAULT);
     $pdo->prepare('INSERT INTO users(email,name,password_hash,created_at) VALUES(?,?,?,?)')->execute(['test@example.invalid', 'Test', $hash, 1]);
     $uid = (int) $pdo->lastInsertId();
-    $pdo->prepare('INSERT INTO user_states(user_id,updated_at) VALUES(?,?)')->execute([$uid, 1]);
+    $pdo->prepare('INSERT INTO user_states(user_id,data,updated_at) VALUES(?,?,?)')->execute([$uid, 'null', 1]);
     check(Database::userState($uid)['state'] === null, 'new user has no fabricated records');
     $saved = Database::saveState($uid, json_decode(json_encode($state), true), 0);
     check($saved['revision'] === 1 && Database::userState($uid)['state']['profile']['weight'] === 75, 'SQLite state round trip');

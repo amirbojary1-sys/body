@@ -5,11 +5,12 @@ require __DIR__ . '/inc/admin.php';
 use FitBot\AdminAuth;
 use FitBot\Database;
 
-$admin = AdminAuth::requireAdmin();
+$admin = AdminAuth::requireAdmin('users.view');
 $pdo = Database::connection();
 
 // ---- actions (POST + CSRF, already verified in inc/admin.php) ----
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    if (!AdminAuth::can($admin, 'users.manage')) { AdminAuth::flash('error', 'برای تغییر وضعیت اعضا دسترسی نداری.'); admin_redirect('users.php'); }
     $action = $_POST['action'] ?? '';
     $id = filter_var($_POST['user_id'] ?? '', FILTER_VALIDATE_INT);
     if ($id !== false && $id > 0) {
@@ -48,7 +49,8 @@ $stmt->execute($args);
 $total = (int) $stmt->fetchColumn();
 [$limit, $offset, $pages] = paginate_params($total, $perPage, $page);
 
-$stmt = $pdo->prepare('SELECT u.id, u.name, u.email, u.is_active, u.created_at, u.last_login_at, s.revision, s.updated_at
+$stmt = $pdo->prepare('SELECT u.id, u.name, u.email, u.is_active, u.created_at, u.last_login_at, s.revision, s.updated_at,
+    (SELECT COUNT(*) FROM subscriptions x WHERE x.user_id = u.id AND x.status = \'active\') AS active_subs
     FROM users u LEFT JOIN user_states s ON s.user_id = u.id' . $where . '
     ORDER BY u.created_at DESC LIMIT ' . $limit . ' OFFSET ' . $offset);
 $stmt->execute($args);
@@ -67,7 +69,7 @@ admin_header($admin, 'کاربران', 'users');
   </div>
   <div class="card-body tight table-wrap">
     <table>
-      <thead><tr><th>#</th><th>کاربر</th><th>وضعیت</th><th>نسخه داده</th><th>ثبت‌نام</th><th>آخرین ورود</th><th>آخرین ذخیره</th><th>عملیات</th></tr></thead>
+      <thead><tr><th>#</th><th>کاربر</th><th>وضعیت</th><th>اشتراک</th><th>ثبت‌نام</th><th>آخرین ورود</th><th>آخرین ذخیره</th><th>عملیات</th></tr></thead>
       <tbody>
       <?php if (!$users): ?>
         <tr><td colspan="8"><div class="empty"><span class="glyph">🔍</span><?= $q !== '' ? 'کاربری با این عبارت پیدا نشد.' : 'هنوز کاربری ثبت‌نام نکرده است.' ?></div></td></tr>
@@ -77,7 +79,7 @@ admin_header($admin, 'کاربران', 'users');
           <td class="num"><?= fa_num((string) $u['id']) ?></td>
           <td><a href="user_view.php?id=<?= (int) $u['id'] ?>"><strong><?= e($u['name']) ?></strong></a><span class="sub" dir="ltr"><?= e($u['email']) ?></span></td>
           <td><?= $active ? '<span class="badge green">فعال</span>' : '<span class="badge red">مسدود</span>' ?></td>
-          <td class="num"><?= $u['revision'] !== null ? fa_num((string) $u['revision']) : '—' ?></td>
+          <td class="num"><?= (int) $u['active_subs'] > 0 ? '<span class="badge green">' . fa_num((string) $u['active_subs']) . ' فعال</span>' : '<span class="badge gray">بدون اشتراک</span>' ?></td>
           <td class="num"><?= jdate((int) $u['created_at']) ?></td>
           <td class="num"><?= jago($u['last_login_at'] ? (int) $u['last_login_at'] : null) ?></td>
           <td class="num"><?= jago($u['updated_at'] ? (int) $u['updated_at'] : null) ?></td>

@@ -1,15 +1,20 @@
 <?php
 declare(strict_types=1);
-/** Dashboard: user statistics, recent signups and admin activity. */
+/** CEO dashboard: permission-aware live stats (proposal §28). */
 require __DIR__ . '/inc/admin.php';
 use FitBot\AdminAuth;
-use FitBot\Http;
 use FitBot\Database;
+use FitBot\Http;
 
 $admin = AdminAuth::requireAdmin();
 $pdo = Database::connection();
 $now = Http::now();
 $weekAgo = $now - 7 * 86_400_000;
+$monthStart = (int) (mktime(0, 0, 0, (int) gmdate('n'), 1, (int) gmdate('Y')) * 1000);
+$canUsers = AdminAuth::can($admin, 'users.view');
+$canCrm = AdminAuth::can($admin, 'crm.view');
+$canSubs = AdminAuth::can($admin, 'memberships.view');
+$canFinance = AdminAuth::can($admin, 'finance.view');
 
 $stats = $pdo->query(
     'SELECT
@@ -20,14 +25,23 @@ $stats = $pdo->query(
         (SELECT COUNT(*) FROM user_states WHERE revision > 0) AS saving_users,
         (SELECT COUNT(*) FROM admins) AS total_admins,
         (SELECT COUNT(*) FROM admin_activity WHERE created_at >= ' . $weekAgo . ') AS actions_week,
-        (SELECT MAX(last_login_at) FROM users) AS last_user_login'
+        (SELECT MAX(last_login_at) FROM users) AS last_user_login,
+        (SELECT COUNT(*) FROM leads) AS total_leads,
+        (SELECT COUNT(*) FROM leads WHERE status = \'new\') AS new_leads,
+        (SELECT COUNT(*) FROM leads WHERE status = \'won\') AS won_leads,
+        (SELECT COUNT(*) FROM subscriptions WHERE status = \'active\') AS active_subs,
+        (SELECT COUNT(*) FROM subscriptions WHERE status = \'active\' AND expires_at IS NOT NULL AND expires_at >= ' . $now . ' AND expires_at < ' . ($now + 7 * 86400000) . ') AS expiring_subs,
+        (SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE kind = \'income\' AND created_at >= ' . $monthStart . ') AS income_month,
+        (SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE kind = \'expense\' AND created_at >= ' . $monthStart . ') AS expense_month'
 )->fetch();
 
-$recentUsers = $pdo->query(
-    'SELECT u.id, u.name, u.email, u.is_active, u.created_at, u.last_login_at, s.revision
-     FROM users u LEFT JOIN user_states s ON s.user_id = u.id
-     ORDER BY u.created_at DESC LIMIT 6'
-)->fetchAll();
+$recentUsers = $canUsers ? $pdo->query(
+    'SELECT u.id, u.name, u.email, u.is_active, u.created_at, u.last_login_at FROM users u ORDER BY u.created_at DESC LIMIT 6'
+)->fetchAll() : [];
+
+$recentLeads = $canCrm ? $pdo->query(
+    'SELECT l.id, l.full_name, l.status, l.created_at, l.follow_up_at FROM leads l ORDER BY l.created_at DESC LIMIT 6'
+)->fetchAll() : [];
 
 $recentActivity = $pdo->query(
     'SELECT admin_name, action, entity, entity_id, created_at FROM admin_activity ORDER BY created_at DESC, id DESC LIMIT 7'
@@ -36,35 +50,68 @@ $recentActivity = $pdo->query(
 $actionLabels = [
     'login' => ['ورود مدیر', 'green'], 'login_failed' => ['ورود ناموفق', 'red'], 'logout' => ['خروج', 'gray'],
     'user_banned' => ['مسدودسازی کاربر', 'red'], 'user_unbanned' => ['فعال‌سازی کاربر', 'green'],
-    'user_deleted' => ['حذف کاربر', 'red'], 'admin_created' => ['افزودن مدیر', 'accent'],
-    'admin_deleted' => ['حذف مدیر', 'red'], 'password_changed' => ['تغییر رمز', 'amber'],
+    'user_deleted' => ['حذف کاربر', 'red'], 'admin_created' => ['افزودن کارمند', 'accent'],
+    'admin_deleted' => ['حذف کارمند', 'red'], 'admin_roles_changed' => ['تغییر نقش کارمند', 'amber'],
+    'password_changed' => ['تغییر رمز', 'amber'],
+    'role_created' => ['ساخت نقش', 'accent'], 'role_updated' => ['ویرایش نقش', 'amber'], 'role_deleted' => ['حذف نقش', 'red'],
+    'branch_created' => ['ساخت شعبه', 'accent'], 'branch_updated' => ['ویرایش شعبه', 'amber'], 'branch_deactivated' => ['تغییر وضعیت شعبه', 'gray'],
+    'lead_created' => ['ثبت لید', 'accent'], 'lead_updated' => ['به‌روزرسانی لید', 'amber'], 'lead_event' => ['پیگیری لید', 'green'],
+    'plan_created' => ['ساخت پلن', 'accent'], 'plan_updated' => ['ویرایش پلن', 'amber'], 'plan_deactivated' => ['تغییر وضعیت پلن', 'gray'],
+    'subscription_created' => ['ثبت اشتراک', 'green'], 'subscription_canceled' => ['لغو اشتراک', 'red'],
+    'finance_added' => ['ثبت تراکنش مالی', 'amber'], 'wallet_adjusted' => ['تغییر کیف پول', 'amber'],
+    'visit_logged' => ['ثبت تردد', 'green'],
 ];
+$leadStatuses = ['new' => 'جدید', 'contacted' => 'تماس‌خورده', 'consult' => 'مشاوره', 'follow_up' => 'پیگیری', 'won' => 'عضو شد', 'lost' => 'منصرف'];
 
 admin_header($admin, 'داشبورد', 'dashboard');
 ?>
+<?php if ($canUsers): ?>
 <div class="grid cols-4">
-  <div class="stat accent"><div class="label">کل کاربران</div><div class="value num"><?= fa_num($stats['total_users']) ?></div><div class="hint">ثبت‌نام‌شده در مجموع</div></div>
-  <div class="stat green"><div class="label">کاربران فعال</div><div class="value num"><?= fa_num($stats['active_users']) ?></div><div class="hint">قابل ورود به سایت</div></div>
-  <div class="stat red"><div class="label">کاربران مسدود</div><div class="value num"><?= fa_num($stats['banned_users']) ?></div><div class="hint">غیرفعال‌شده توسط مدیر</div></div>
-  <div class="stat amber"><div class="label">ثبت‌نام هفته اخیر</div><div class="value num"><?= fa_num($stats['new_users']) ?></div><div class="hint">۷ روز گذشته</div></div>
+  <div class="stat accent"><div class="label">کل اعضا</div><div class="value num"><?= fa_num($stats['total_users']) ?></div><div class="hint">ثبت‌نام‌شده در مجموع</div></div>
+  <div class="stat green"><div class="label">اعضای فعال</div><div class="value num"><?= fa_num($stats['active_users']) ?></div><div class="hint">قابل ورود به سایت</div></div>
+  <div class="stat red"><div class="label">اعضای مسدود</div><div class="value num"><?= fa_num($stats['banned_users']) ?></div><div class="hint">غیرفعال‌شده</div></div>
+  <div class="stat amber"><div class="label">ثبت‌نام هفته</div><div class="value num"><?= fa_num($stats['new_users']) ?></div><div class="hint">۷ روز گذشته</div></div>
 </div>
+<?php endif; ?>
+
+<?php if ($canSubs || $canCrm): ?>
+<div class="grid cols-4" style="margin-top:16px">
+  <?php if ($canSubs): ?>
+  <div class="stat green"><div class="label">اشتراک‌های فعال</div><div class="value num"><?= fa_num($stats['active_subs']) ?></div><div class="hint">عضویت جاری اعضا</div></div>
+  <div class="stat amber"><div class="label">در حال انقضا</div><div class="value num"><?= fa_num($stats['expiring_subs']) ?></div><div class="hint">۷ روز آینده — فرصت تمدید</div></div>
+  <?php endif; ?>
+  <?php if ($canCrm): ?>
+  <div class="stat accent"><div class="label">لیدهای جدید</div><div class="value num"><?= fa_num($stats['new_leads']) ?></div><div class="hint">از <?= fa_num($stats['total_leads']) ?> لید ثبت‌شده</div></div>
+  <div class="stat"><div class="label">تبدیل به عضو</div><div class="value num"><?= fa_num($stats['won_leads']) ?></div><div class="hint">لیدهای موفق</div></div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php if ($canFinance): ?>
+<div class="grid cols-3" style="margin-top:16px">
+  <div class="stat green"><div class="label">درآمد این ماه</div><div class="value num" style="font-size:21px"><?= fa_num(number_format((float) $stats['income_month'])) ?></div><div class="hint">تومان</div></div>
+  <div class="stat red"><div class="label">هزینه این ماه</div><div class="value num" style="font-size:21px"><?= fa_num(number_format((float) $stats['expense_month'])) ?></div><div class="hint">تومان</div></div>
+  <div class="stat <?= $stats['income_month'] - $stats['expense_month'] >= 0 ? 'green' : 'red' ?>"><div class="label">سود این ماه</div><div class="value num" style="font-size:21px"><?= fa_num(number_format((float) ($stats['income_month'] - $stats['expense_month']))) ?></div><div class="hint">تومان</div></div>
+</div>
+<?php endif; ?>
 
 <div class="grid cols-4" style="margin-top:16px">
-  <div class="stat"><div class="label">کاربران دارای داده ذخیره‌شده</div><div class="value num"><?= fa_num($stats['saving_users']) ?></div><div class="hint">حداقل یک بار ذخیره کرده‌اند</div></div>
-  <div class="stat"><div class="label">مدیران سایت</div><div class="value num"><?= fa_num($stats['total_admins']) ?></div><div class="hint"><a href="admins.php">مدیریت مدیران</a></div></div>
-  <div class="stat"><div class="label">اقدام‌های مدیریتی هفته</div><div class="value num"><?= fa_num($stats['actions_week']) ?></div><div class="hint">۷ روز گذشته</div></div>
-  <div class="stat"><div class="label">آخرین ورود کاربر</div><div class="value" style="font-size:16px;margin-top:10px"><?= jago($stats['last_user_login'] ? (int) $stats['last_user_login'] : null) ?></div></div>
+  <div class="stat"><div class="label">کارکنان پنل</div><div class="value num"><?= fa_num($stats['total_admins']) ?></div><div class="hint"><a href="admins.php">مدیریت کارکنان</a></div></div>
+  <div class="stat"><div class="label">اقدام‌های هفته</div><div class="value num"><?= fa_num($stats['actions_week']) ?></div><div class="hint">۷ روز گذشته</div></div>
+  <div class="stat"><div class="label">اعضای دارای داده</div><div class="value num"><?= fa_num($stats['saving_users']) ?></div><div class="hint">ذخیره در اپلیکیشن</div></div>
+  <div class="stat"><div class="label">آخرین ورود عضو</div><div class="value" style="font-size:15px;margin-top:9px"><?= jago($stats['last_user_login'] ? (int) $stats['last_user_login'] : null) ?></div></div>
 </div>
 
 <div class="grid cols-2" style="margin-top:22px">
+  <?php if ($canUsers): ?>
   <div class="card">
-    <div class="card-head"><h2>آخرین ثبت‌نام‌ها</h2><a class="sub" href="users.php">همه کاربران ←</a></div>
+    <div class="card-head"><h2>آخرین ثبت‌نام‌ها</h2><a class="sub" href="users.php">همه اعضا ←</a></div>
     <div class="card-body tight table-wrap">
       <table>
-        <thead><tr><th>کاربر</th><th>وضعیت</th><th>ثبت‌نام</th><th>آخرین ورود</th></tr></thead>
+        <thead><tr><th>عضو</th><th>وضعیت</th><th>ثبت‌نام</th><th>آخرین ورود</th></tr></thead>
         <tbody>
         <?php if (!$recentUsers): ?>
-          <tr><td colspan="4"><div class="empty"><span class="glyph">🏋️</span>هنوز کاربری ثبت‌نام نکرده است.</div></td></tr>
+          <tr><td colspan="4"><div class="empty"><span class="glyph">🏋️</span>هنوز عضوی ثبت‌نام نکرده است.</div></td></tr>
         <?php endif; ?>
         <?php foreach ($recentUsers as $u): ?>
           <tr>
@@ -78,27 +125,53 @@ admin_header($admin, 'داشبورد', 'dashboard');
       </table>
     </div>
   </div>
+  <?php endif; ?>
 
+  <?php if ($canCrm): ?>
   <div class="card">
-    <div class="card-head"><h2>آخرین فعالیت‌های پنل</h2><a class="sub" href="activity.php">گزارش کامل ←</a></div>
+    <div class="card-head"><h2>آخرین لیدها</h2><a class="sub" href="leads.php">CRM کامل ←</a></div>
     <div class="card-body tight table-wrap">
       <table>
-        <thead><tr><th>اقدام</th><th>مدیر</th><th>زمان</th></tr></thead>
+        <thead><tr><th>لید</th><th>وضعیت</th><th>ثبت</th><th>پیگیری</th></tr></thead>
         <tbody>
-        <?php if (!$recentActivity): ?>
-          <tr><td colspan="3"><div class="empty"><span class="glyph">📋</span>فعالیتی ثبت نشده است.</div></td></tr>
+        <?php if (!$recentLeads): ?>
+          <tr><td colspan="4"><div class="empty"><span class="glyph">📝</span>هنوز لیدی ثبت نشده است.</div></td></tr>
         <?php endif; ?>
-        <?php foreach ($recentActivity as $a): ?>
-          <?php [$label, $color] = $actionLabels[$a['action']] ?? [$a['action'], 'gray']; ?>
+        <?php foreach ($recentLeads as $l): ?>
           <tr>
-            <td><span class="badge <?= $color ?>"><?= e($label) ?></span><?= $a['entity'] === 'user' && $a['entity_id'] ? '<span class="sub">کاربر #' . fa_num((string) $a['entity_id']) . '</span>' : '' ?></td>
-            <td><?= e($a['admin_name']) ?></td>
-            <td class="num"><?= jago((int) $a['created_at']) ?></td>
+            <td><a href="lead_view.php?id=<?= (int) $l['id'] ?>"><strong><?= e($l['full_name']) ?></strong></a></td>
+            <td><span class="badge <?= $l['status'] === 'won' ? 'green' : ($l['status'] === 'lost' ? 'red' : 'accent') ?>"><?= e($leadStatuses[$l['status']] ?? $l['status']) ?></span></td>
+            <td class="num"><?= jago((int) $l['created_at']) ?></td>
+            <td class="num"><?= $l['follow_up_at'] ? jago((int) $l['follow_up_at']) : '—' ?></td>
           </tr>
         <?php endforeach; ?>
         </tbody>
       </table>
     </div>
+  </div>
+  <?php endif; ?>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div class="card-head"><h2>آخرین فعالیت‌های پنل</h2><a class="sub" href="activity.php">گزارش کامل ←</a></div>
+  <div class="card-body tight table-wrap">
+    <table>
+      <thead><tr><th>اقدام</th><th>مدیر</th><th>موضوع</th><th>زمان</th></tr></thead>
+      <tbody>
+      <?php if (!$recentActivity): ?>
+        <tr><td colspan="4"><div class="empty"><span class="glyph">📋</span>فعالیتی ثبت نشده است.</div></td></tr>
+      <?php endif; ?>
+      <?php foreach ($recentActivity as $a): ?>
+        <?php [$label, $color] = $actionLabels[$a['action']] ?? [$a['action'], 'gray']; ?>
+        <tr>
+          <td><span class="badge <?= $color ?>"><?= e($label) ?></span></td>
+          <td><?= e($a['admin_name']) ?></td>
+          <td class="num"><?= $a['entity'] !== '' ? e($a['entity'] === 'user' ? 'کاربر' : ($a['entity'] === 'lead' ? 'لید' : ($a['entity'] === 'admin' ? 'کارمند' : ($a['entity'] === 'role' ? 'نقش' : ($a['entity'] === 'branch' ? 'شعبه' : ($a['entity'] === 'plan' ? 'پلن' : ($a['entity'] === 'subscription' ? 'اشتراک' : $a['entity']))))))) . ' #' . fa_num((string) ($a['entity_id'] ?? '')) : '—' ?></td>
+          <td class="num"><?= jago((int) $a['created_at']) ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
   </div>
 </div>
 <?php admin_footer();

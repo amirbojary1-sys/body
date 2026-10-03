@@ -70,11 +70,16 @@ function admin_url(string $page): string { return $page . '.php'; }
 function admin_header(array $admin, string $title, string $active): void
 {
     $nav = [
-        'dashboard' => ['index.php', 'داشبورد', 'M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z'],
-        'users' => ['users.php', 'کاربران', 'M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3Zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z'],
-        'admins' => ['admins.php', 'مدیران', 'm12 2 8 4v7c0 5-8 9-8 9S4 18 4 13V6l8-4Zm-1.2 12.6 6-6-1.4-1.4-4.6 4.6-2.2-2.2-1.4 1.4 3.6 3.6Z'],
-        'activity' => ['activity.php', 'گزارش فعالیت', 'M3 3v17h18M7 14l4-5 4 3 6-8'],
-        'profile' => ['profile.php', 'پروفایل من', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 14.2a7.2 7.2 0 0 1-6-3.2c.03-2 4-3.1 6-3.1s5.97 1.1 6 3.1a7.2 7.2 0 0 1-6 3.2Z'],
+        'dashboard' => ['index.php', 'داشبورد', 'M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z', ''],
+        'leads' => ['leads.php', 'CRM و لیدها', 'M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.6.1.3 0 .7-.2 1l-2.3 2.2Z', 'crm.view'],
+        'users' => ['users.php', 'کاربران', 'M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3Zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z', 'users.view'],
+        'memberships' => ['memberships.php', 'عضویت‌ها', 'M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4H4V6h16v2ZM7 15H5v-2h2v2Zm4 0H9v-2h2v2Z', 'memberships.view'],
+        'finance' => ['finance.php', 'مالی', 'M21 7H5V5h14v2h2Zm0 2H3v10h18V9Zm-3 6h-4v-2h4v2Z', 'finance.view'],
+        'branches' => ['branches.php', 'شعب', 'M12 3 3 8v13h6v-6h6v6h6V8l-9-5Z', 'branches.view'],
+        'staff' => ['admins.php', 'کارکنان', 'm12 2 8 4v7c0 5-8 9-8 9S4 18 4 13V6l8-4Zm-1.2 12.6 6-6-1.4-1.4-4.6 4.6-2.2-2.2-1.4 1.4 3.6 3.6Z', 'staff.manage'],
+        'roles' => ['roles.php', 'نقش‌ها و دسترسی', 'M14 3a7 7 0 0 0-6.8 8.8L3 16v3h3l1-1v-2h2v-2h2l1.2-1.2A7 7 0 1 0 14 3Zm2.5 6a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z', 'roles.view'],
+        'activity' => ['activity.php', 'گزارش فعالیت', 'M3 3v17h18M7 14l4-5 4 3 6-8', 'reports.view'],
+        'profile' => ['profile.php', 'پروفایل من', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 14.2a7.2 7.2 0 0 1-6-3.2c.03-2 4-3.1 6-3.1s5.97 1.1 6 3.1a7.2 7.2 0 0 1-6 3.2Z', ''],
     ];
     $driver = \FitBot\Database::isMysql() ? 'MySQL' : 'SQLite';
     echo '<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8">'
@@ -87,7 +92,8 @@ function admin_header(array $admin, string $title, string $active): void
     if ($flash) echo '<div class="flash-wrap"><div class="flash flash-' . e($flash['type']) . '">' . e($flash['message']) . '</div></div>';
     echo '<aside class="sidebar"><div class="brand"><span class="brand-mark">⚡</span><div><strong>فیت‌بات</strong><small>پنل مدیریت</small></div></div>';
     echo '<nav>';
-    foreach ($nav as $key => [$href, $label, $icon]) {
+    foreach ($nav as $key => [$href, $label, $icon, $perm]) {
+        if ($perm !== '' && !\FitBot\AdminAuth::can($admin, $perm)) continue;
         echo '<a href="' . e($href) . '" class="' . ($active === $key ? 'active' : '') . '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="' . $icon . '"/></svg><span>' . e($label) . '</span></a>';
     }
     echo '</nav>';

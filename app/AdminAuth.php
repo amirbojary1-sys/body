@@ -61,7 +61,7 @@ final class AdminAuth
 
     private static function publicView(array $a): array
     {
-        return [
+        $view = [
             'id' => (int) $a['id'],
             'username' => $a['username'],
             'email' => $a['email'],
@@ -70,14 +70,34 @@ final class AdminAuth
             'createdAt' => (int) $a['created_at'],
             'defaultPassword' => password_verify('Admin@12345', $a['password_hash']),
         ];
+        // RBAC: roles and effective permissions (proposal §2).
+        $roles = Rbac::rolesOfAdmin((int) $a['id']);
+        $view['roles'] = $roles;
+        $view['roleTitle'] = $view['isSuper'] ? 'مدیر کل' : ($roles[0]['title'] ?? 'بدون نقش');
+        $permissions = [];
+        foreach (Rbac::permissionsOfAdmin((int) $a['id']) as $code) $permissions[$code] = true;
+        $view['permissions'] = $permissions;
+        return $view;
     }
 
-    /** For admin pages: redirects to the login form when nobody is signed in. */
-    public static function requireAdmin(): array
+    /** Permission check: super admins and the ceo role bypass everything. */
+    public static function can(array $admin, string $permission): bool
+    {
+        return $admin['isSuper'] || isset($admin['permissions'][$permission]);
+    }
+
+    /** For admin pages: redirects to the login form when nobody is signed in,
+     *  and enforces a permission when one is requested (RBAC §2). */
+    public static function requireAdmin(string $permission = ''): array
     {
         $a = self::admin();
         if (!$a) {
             header('Location: login.php');
+            exit;
+        }
+        if ($permission !== '' && !self::can($a, $permission)) {
+            self::flash('error', 'دسترسی به این بخش برای نقش تو تعریف نشده است.');
+            header('Location: index.php');
             exit;
         }
         return $a;

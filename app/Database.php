@@ -51,13 +51,18 @@ final class Database
         try {
             self::mysqlSchema($pdo);
             self::seedDefaultAdmin($pdo);
+            Platform::migrate($pdo, 'mysql');
         } catch (\PDOException $e) {
-            // Import already done by a limited-privilege account? Verify core tables exist.
+            // Schema exists (imported with limited privileges)? Verify the core tables and continue;
+            // a skipped bootstrap must stay visible in the log instead of being silently swallowed.
             try {
                 $pdo->query('SELECT 1 FROM users LIMIT 1');
                 $pdo->query('SELECT 1 FROM admins LIMIT 1');
+                $pdo->query('SELECT 1 FROM roles LIMIT 1');
+                $pdo->query('SELECT branch_id FROM users LIMIT 1');
+                error_log('FitBot schema bootstrap skipped after PDO error: ' . $e->getMessage());
             } catch (\PDOException) {
-                throw new \RuntimeException('جدول‌های دیتابیس در MySQL پیدا نشدند و ساختن خودکار آن‌ها ممکن نبود («' . $e->getMessage() . '»). فایل database/fitbot_mysql.sql را با phpMyAdmin یا دستور mysql ایمپورت کن یا به کاربر MySQL مجوز CREATE بده.');
+                throw new \RuntimeException('جدول‌های دیتابیس در MySQL پیدا نشدند و ساختن خودکار آن‌ها ممکن نبود («' . $e->getMessage() . '»). فایل database/fitbot_mysql.sql (نسخه جدید پلتفرم) را با phpMyAdmin یا دستور mysql ایمپورت کن یا به کاربر MySQL مجوز CREATE بده.');
             }
         }
         return $pdo;
@@ -81,6 +86,7 @@ final class Database
             password_hash VARCHAR(255) NOT NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             last_login_at BIGINT UNSIGNED NULL,
+            branch_id INT UNSIGNED NULL,
             created_at BIGINT UNSIGNED NOT NULL,
             KEY idx_users_created (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -138,6 +144,7 @@ final class Database
                 password_hash TEXT NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 last_login_at INTEGER,
+                branch_id INTEGER,
                 created_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS user_states (
@@ -173,6 +180,7 @@ final class Database
             );');
             self::sqliteMigrate($pdo);
             self::seedDefaultAdmin($pdo);
+            Platform::migrate($pdo, 'sqlite');
             self::$pdo = $pdo;
         } finally { umask($old); }
         return $pdo;
