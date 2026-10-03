@@ -8,7 +8,7 @@ try {
     $stored = $user ? Database::userState($user['id']) : ['state' => null, 'revision' => 0, 'updatedAt' => null];
     $boot = ['apiUrl' => 'api.php', 'user' => $user, 'csrf' => Auth::csrf(), ...$stored, 'aiAvailable' => AgentService::available(), 'engine' => 'php', 'calculation' => FitnessService::calculate(is_array($stored['state']['profile'] ?? null) ? $stored['state']['profile'] : [])];
     $nonce = base64_encode(random_bytes(18));
-    $assetVersion = '3.0.0';
+    $assetVersion = '3.1.0';
     header('Content-Type: text/html; charset=utf-8');
     header('Cache-Control: private, no-store');
     header('X-Content-Type-Options: nosniff');

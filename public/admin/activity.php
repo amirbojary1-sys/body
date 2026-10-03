@@ -27,8 +27,12 @@ $labels = [
     'subscription_created' => ['ثبت اشتراک', 'green'], 'subscription_canceled' => ['لغو اشتراک', 'red'],
     'finance_added' => ['ثبت تراکنش مالی', 'amber'], 'wallet_adjusted' => ['تغییر کیف پول', 'amber'],
     'visit_logged' => ['ثبت تردد', 'green'],
+    'service_created' => ['ساخت خدمت', 'accent'], 'service_deactivated' => ['تغییر وضعیت خدمت', 'gray'],
+    'reservation_confirmed' => ['تأیید رزرو', 'green'], 'reservation_done' => ['انجام رزرو', 'green'], 'reservation_canceled' => ['لغو رزرو', 'red'],
+    'product_created' => ['افزودن محصول', 'accent'], 'product_deactivated' => ['تغییر وضعیت محصول', 'gray'], 'stock_adjusted' => ['تغییر موجودی', 'amber'],
+    'order_preparing' => ['آماده‌سازی سفارش', 'amber'], 'order_done' => ['تحویل سفارش', 'green'], 'order_canceled' => ['لغو سفارش', 'red'],
 ];
-$entities = ['user' => 'کاربر', 'lead' => 'لید', 'admin' => 'کارمند', 'role' => 'نقش', 'branch' => 'شعبه', 'plan' => 'پلن', 'subscription' => 'اشتراک', 'finance' => 'مالی'];
+$entities = ['user' => 'کاربر', 'lead' => 'لید', 'admin' => 'کارمند', 'role' => 'نقش', 'branch' => 'شعبه', 'plan' => 'پلن', 'subscription' => 'اشتراک', 'finance' => 'مالی', 'service' => 'خدمت', 'reservation' => 'رزرو', 'product' => 'محصول', 'order' => 'سفارش'];
 
 admin_header($admin, 'گزارش فعالیت', 'activity');
 ?>

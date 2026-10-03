@@ -19,6 +19,10 @@ use PDO;
  *   Token       : token_ledger                               (§11)
  *   Check-in    : visit_logs                                 (§4 تردد)
  *   Finance     : finance_transactions                       (§22)
+ *   Services    : services, reservations                     (§7 رزرو خدمات)
+ *   Store/Cafe  : products, orders, order_items,
+ *                 inventory_movements                        (§8, §27)
+ *   Meta        : platform_meta                              (نسخه‌های seed)
  */
 final class Platform
 {
@@ -29,6 +33,28 @@ final class Platform
         self::addColumnIfNeeded($pdo, $mysql, 'users', 'branch_id', $mysql ? 'INT UNSIGNED NULL' : 'INTEGER NULL');
         self::seedDefaultBranch($pdo);
         Rbac::ensureDefaults($pdo);
+        Seed::demo($pdo);
+    }
+
+    public static function metaGet(PDO $pdo, string $name, string $default = ''): string
+    {
+        try {
+            $stmt = $pdo->prepare('SELECT value FROM platform_meta WHERE name = ?');
+            $stmt->execute([$name]);
+            $v = $stmt->fetchColumn();
+            return $v === false ? $default : (string) $v;
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+
+    public static function metaSet(PDO $pdo, string $name, string $value): void
+    {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->prepare('INSERT INTO platform_meta(name, value) VALUES(?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)')->execute([$name, $value]);
+        } else {
+            $pdo->prepare('INSERT INTO platform_meta(name, value) VALUES(?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value')->execute([$name, $value]);
+        }
     }
 
     /** @return string[] DDL statements, all idempotent (IF NOT EXISTS). */
@@ -199,6 +225,81 @@ final class Platform
             KEY idx_finance_created (created_at),
             KEY idx_finance_kind (kind)' : '') . $fk('finance_transactions', 'branch_id', 'branches', 'SET NULL') . $fk('finance_transactions', 'created_by', 'admins', 'SET NULL') . $tail;
 
+        // ----- Services & reservations (§7) -----
+        $s[] = 'CREATE TABLE IF NOT EXISTS services (
+            id ' . $pk . ',
+            branch_id ' . $intN . ',
+            name ' . $v(100) . ' NOT NULL,
+            category ' . $v(20) . ' NOT NULL DEFAULT \'other\',
+            duration_minutes ' . $int . ' NOT NULL DEFAULT 60,
+            price ' . $money . ',
+            capacity ' . $int . ' NOT NULL DEFAULT 1,
+            is_active ' . $bool . ' NOT NULL DEFAULT 1,
+            created_at ' . $ts . $fk('services', 'branch_id', 'branches', 'SET NULL') . $tail;
+
+        $s[] = 'CREATE TABLE IF NOT EXISTS reservations (
+            id ' . $pk . ',
+            service_id ' . $int . ' NOT NULL,
+            user_id ' . $int . ' NOT NULL,
+            branch_id ' . $intN . ',
+            reserved_at ' . $ts . ',
+            status ' . $v(20) . ' NOT NULL DEFAULT \'pending\',
+            price ' . $money . ',
+            note ' . $txt300 . ',
+            created_by ' . $intN . ',
+            created_at ' . $ts . ($mysql ? ',
+            KEY idx_res_status (status),
+            KEY idx_res_user (user_id),
+            KEY idx_res_at (reserved_at)' : '') . $fk('reservations', 'service_id', 'services', 'RESTRICT') . $fk('reservations', 'user_id', 'users') . $fk('reservations', 'branch_id', 'branches', 'SET NULL') . $fk('reservations', 'created_by', 'admins', 'SET NULL') . $tail;
+
+        // ----- Store & cafe products, orders, inventory (§8, §27) -----
+        $s[] = 'CREATE TABLE IF NOT EXISTS products (
+            id ' . $pk . ',
+            department ' . $v(10) . ' NOT NULL DEFAULT \'store\',
+            name ' . $v(100) . ' NOT NULL,
+            category ' . $v(50) . ' NOT NULL DEFAULT \'\',
+            price ' . $money . ',
+            stock ' . ($mysql ? 'INT NOT NULL DEFAULT 0' : 'INTEGER NOT NULL DEFAULT 0') . ',
+            low_stock ' . $int . ' NOT NULL DEFAULT 5,
+            is_active ' . $bool . ' NOT NULL DEFAULT 1,
+            created_at ' . $ts . ($mysql ? ',
+            KEY idx_products_dept (department)' : '') . $tail;
+
+        $s[] = 'CREATE TABLE IF NOT EXISTS orders (
+            id ' . $pk . ',
+            user_id ' . $int . ' NOT NULL,
+            department ' . $v(10) . ' NOT NULL DEFAULT \'store\',
+            status ' . $v(20) . ' NOT NULL DEFAULT \'pending\',
+            total ' . $money . ',
+            pay_method ' . $v(10) . ' NOT NULL DEFAULT \'cash\',
+            created_at ' . $ts . ($mysql ? ',
+            KEY idx_orders_user (user_id),
+            KEY idx_orders_status (status)' : '') . $fk('orders', 'user_id', 'users') . $tail;
+
+        $s[] = 'CREATE TABLE IF NOT EXISTS order_items (
+            id ' . $pk . ',
+            order_id ' . $int . ' NOT NULL,
+            product_id ' . $int . ' NOT NULL,
+            qty ' . $int . ' NOT NULL DEFAULT 1,
+            unit_price ' . ($mysql ? 'BIGINT UNSIGNED NOT NULL DEFAULT 0' : 'INTEGER NOT NULL DEFAULT 0') . ($mysql ? ',
+            KEY idx_oi_order (order_id)' : '') . $fk('order_items', 'order_id', 'orders') . $fk('order_items', 'product_id', 'products', 'RESTRICT') . $tail;
+
+        $s[] = 'CREATE TABLE IF NOT EXISTS inventory_movements (
+            id ' . $bigpk . ',
+            product_id ' . $int . ' NOT NULL,
+            qty ' . ($mysql ? 'INT NOT NULL' : 'INTEGER NOT NULL') . ',
+            kind ' . $v(20) . ' NOT NULL,
+            note ' . $txt200 . ',
+            admin_id ' . $intN . ',
+            created_at ' . $ts . ($mysql ? ',
+            KEY idx_inv_product (product_id)' : '') . $fk('inventory_movements', 'product_id', 'products') . $fk('inventory_movements', 'admin_id', 'admins', 'SET NULL') . $tail;
+
+        // ----- platform meta (seed versions etc.) -----
+        $s[] = 'CREATE TABLE IF NOT EXISTS platform_meta (
+            name ' . $v(50) . ' NOT NULL' . ($mysql ? '' : ' UNIQUE') . ',
+            value ' . $v(255) . ' NOT NULL DEFAULT \'\''
+            . ($mysql ? ', PRIMARY KEY (name)' : '') . $tail;
+
         if (!$mysql) {
             $s[] = 'CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)';
             $s[] = 'CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at)';
@@ -210,6 +311,14 @@ final class Platform
             $s[] = 'CREATE INDEX IF NOT EXISTS idx_visits_user ON visit_logs(user_id)';
             $s[] = 'CREATE INDEX IF NOT EXISTS idx_visits_created ON visit_logs(created_at)';
             $s[] = 'CREATE INDEX IF NOT EXISTS idx_finance_created ON finance_transactions(created_at)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_res_status ON reservations(status)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_res_user ON reservations(user_id)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_res_at ON reservations(reserved_at)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_products_dept ON products(department)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_oi_order ON order_items(order_id)';
+            $s[] = 'CREATE INDEX IF NOT EXISTS idx_inv_product ON inventory_movements(product_id)';
         }
         return $s;
     }

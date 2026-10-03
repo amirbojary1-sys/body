@@ -1,10 +1,16 @@
 -- ============================================================
---  FitBot Platform — فایل دیتابیس MySQL (نسخه ۴ پلتفرم باشگاه)
+--  FitBot Platform — فایل دیتابیس MySQL (نسخه ۵ پلتفرم باشگاه)
 --
 --  ★ این نسخه شامل جداول پلتفرم مدیریت باشگاه است:
 --      شعب، نقش‌ها و دسترسی‌ها (RBAC)، CRM و لیدها،
 --      پلن‌ها و اشتراک‌های عضویت، کیف پول، دفتر کل توکن،
---      تردد اعضا و تراکنش‌های مالی
+--      تردد اعضا، تراکنش‌های مالی، خدمات و رزروها،
+--      محصولات فروشگاه/کافه، سفارش‌ها، انبار و متادیتا
+--
+--  ★ داده‌های نمونه (پلن‌ها، خدمات، محصولات فروشگاه و کافه،
+--      عضو دمو با کیف پول/توکن/اشتراک/تردد/رزرو/سفارش و لیدها)
+--      در اولین اجرای برنامه به‌صورت خودکار ساخته می‌شوند.
+--      عضو نمونه برای ورود: demo@fitbot.ir / Demo@12345
 --
 --  روش ایمپورت با phpMyAdmin:
 --    1) یک دیتابیس بساز (مثلاً fitbot) — اگر نسخه قبلی را داشته‌ای
@@ -332,6 +338,120 @@ CREATE TABLE IF NOT EXISTS `finance_transactions` (
     REFERENCES `branches` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_finance_admin` FOREIGN KEY (`created_by`)
     REFERENCES `admins` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- خدمات مجموعه و رزروها (§7)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `services` (
+  `id`              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+  `branch_id`       INT UNSIGNED    NULL,
+  `name`            VARCHAR(100)    NOT NULL,
+  `category`        VARCHAR(20)     NOT NULL DEFAULT 'other' COMMENT 'gym/coach/class/massage/salon/cafe/parking/locker/physio/med/pool/slimming/other',
+  `duration_minutes` INT UNSIGNED   NOT NULL DEFAULT 60,
+  `price`           BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'تومان',
+  `capacity`        INT UNSIGNED    NOT NULL DEFAULT 1,
+  `is_active`       TINYINT(1)      NOT NULL DEFAULT 1,
+  `created_at`      BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_services_branch` FOREIGN KEY (`branch_id`)
+    REFERENCES `branches` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `reservations` (
+  `id`          INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+  `service_id`  INT UNSIGNED    NOT NULL,
+  `user_id`     INT UNSIGNED    NOT NULL,
+  `branch_id`   INT UNSIGNED    NULL,
+  `reserved_at` BIGINT UNSIGNED NOT NULL COMMENT 'زمان نوبت (میلی‌ثانیه)',
+  `status`      VARCHAR(20)     NOT NULL DEFAULT 'pending' COMMENT 'pending/confirmed/done/canceled',
+  `price`       BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `note`        VARCHAR(300)    NOT NULL DEFAULT '',
+  `created_by`  INT UNSIGNED    NULL,
+  `created_at`  BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_res_status` (`status`),
+  KEY `idx_res_user` (`user_id`),
+  KEY `idx_res_at` (`reserved_at`),
+  CONSTRAINT `fk_res_service` FOREIGN KEY (`service_id`)
+    REFERENCES `services` (`id`),
+  CONSTRAINT `fk_res_user` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_res_branch` FOREIGN KEY (`branch_id`)
+    REFERENCES `branches` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_res_admin` FOREIGN KEY (`created_by`)
+    REFERENCES `admins` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- محصولات فروشگاه و کافه (§8, §27)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `products` (
+  `id`         INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+  `department` VARCHAR(10)     NOT NULL DEFAULT 'store' COMMENT 'store/cafe',
+  `name`       VARCHAR(100)    NOT NULL,
+  `category`   VARCHAR(50)     NOT NULL DEFAULT '',
+  `price`      BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'تومان',
+  `stock`      INT             NOT NULL DEFAULT 0,
+  `low_stock`  INT UNSIGNED    NOT NULL DEFAULT 5 COMMENT 'آستانه هشدار موجودی',
+  `is_active`  TINYINT(1)      NOT NULL DEFAULT 1,
+  `created_at` BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_products_dept` (`department`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `orders` (
+  `id`         INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+  `user_id`    INT UNSIGNED    NOT NULL,
+  `department` VARCHAR(10)     NOT NULL DEFAULT 'store',
+  `status`     VARCHAR(20)     NOT NULL DEFAULT 'pending' COMMENT 'pending/paid/preparing/done/canceled',
+  `total`      BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `pay_method` VARCHAR(10)     NOT NULL DEFAULT 'cash' COMMENT 'wallet/cash',
+  `created_at` BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_orders_user` (`user_id`),
+  KEY `idx_orders_status` (`status`),
+  CONSTRAINT `fk_orders_user` FOREIGN KEY (`user_id`)
+    REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `order_items` (
+  `id`         INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+  `order_id`   INT UNSIGNED    NOT NULL,
+  `product_id` INT UNSIGNED    NOT NULL,
+  `qty`        INT UNSIGNED    NOT NULL DEFAULT 1,
+  `unit_price` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_oi_order` (`order_id`),
+  CONSTRAINT `fk_oi_order` FOREIGN KEY (`order_id`)
+    REFERENCES `orders` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_oi_product` FOREIGN KEY (`product_id`)
+    REFERENCES `products` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `inventory_movements` (
+  `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `product_id` INT UNSIGNED    NOT NULL,
+  `qty`        INT             NOT NULL COMMENT 'مثبت=ورود، منفی=خروج',
+  `kind`       VARCHAR(20)     NOT NULL COMMENT 'purchase/sale/waste/return/adjust',
+  `note`       VARCHAR(200)    NOT NULL DEFAULT '',
+  `admin_id`   INT UNSIGNED    NULL,
+  `created_at` BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_inv_product` (`product_id`),
+  CONSTRAINT `fk_inv_product` FOREIGN KEY (`product_id`)
+    REFERENCES `products` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_inv_admin` FOREIGN KEY (`admin_id`)
+    REFERENCES `admins` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- متادیتای پلتفرم (نسخه seed و تنظیمات داخلی)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `platform_meta` (
+  `name`  VARCHAR(50)  NOT NULL,
+  `value` VARCHAR(255) NOT NULL DEFAULT '',
+  PRIMARY KEY (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------

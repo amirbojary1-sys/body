@@ -4,6 +4,7 @@ declare(strict_types=1);
 $storage = __DIR__ . '/.runtime-' . bin2hex(random_bytes(5));
 putenv('STORAGE_PATH=' . $storage);
 putenv('DB_DRIVER=sqlite'); // tests always run on a throwaway SQLite database
+putenv('FITBOT_NO_DEMO=1'); // keep test expectations deterministic
 require dirname(__DIR__) . '/app/bootstrap.php';
 use FitBot\{ApiException, AgentService, Database, FitnessService, StateValidator};
 $checks = 0;

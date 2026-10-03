@@ -1,5 +1,5 @@
 'use strict';
-const ASSETS={athlete:'assets/images/athlete.jpg',nutrition:'assets/images/nutrition.jpg'};
+const ASSETS={athlete:'assets/images/athlete.jpg',nutrition:'assets/images/nutrition.jpg',servicesBanner:'assets/images/services-banner.jpg',storeBanner:'assets/images/store-banner.jpg',cafeBanner:'assets/images/cafe-banner.jpg'};
 const GROUPS={all:'همه حرکات',chest:'سینه',back:'پشت',legs:'پا',arms:'بازو',shoulders:'سرشانه',core:'میان‌تنه'};
 const EQUIPMENT={home:'خانه، بدون ابزار',dumbbell:'دمبل',gym:'باشگاه'};
 const GOALS={lose:'کاهش چربی',maintain:'حفظ آمادگی',gain:'عضله‌سازی'};

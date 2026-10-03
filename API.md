@@ -131,6 +131,30 @@ Response:
 
 Possible action types: `planner`, `calculator`, `nutrition`, `progress`, `log_water`, `start_timer`, `update_goal`. Tools are proposals only. `log_water` allows 1–2 glasses; `start_timer` allows 30–180 seconds. Unknown tools and malformed arguments are discarded. Every data-changing proposal requires an explicit UI approval before the normal state-save path.
 
+## Member portal & admin panel (HTML, Phase 2)
+
+Phase 2 club features are server-rendered PHP pages with form POSTs (not JSON actions). All forms carry a `csrf` hidden field tied to the session; guests are redirected to the login pages.
+
+### Member portal — `panel.php` (login: `login.php`)
+
+| Request | Params | Behavior |
+|---|---|---|
+| `GET ?tab=home` | — | Wallet, tokens, active reservations, recent orders |
+| `GET ?tab=services` | — | Active services with reserve form |
+| `GET ?tab=store` | — | Store & cafe products with order form |
+| `GET ?tab=orders` | — | Reservation + order history |
+| `POST action=reserve` | `service_id`, `date` (Y-m-d), `time` (H:i) | Creates a `pending` reservation (window: now−1h … now+60d, Asia/Tehran) |
+| `POST action=order` | `product_id`, `qty` (1–20), `pay=wallet|cash` | Wallet: immediate debit, order `paid`, income booked. Cash: order `pending`, income on delivery |
+
+### Admin pages (login: `admin/login.php`, permission-checked)
+
+| Page | Actions | Financial side effects |
+|---|---|---|
+| `admin/services.php` | `create`, `update`, `toggle` | — |
+| `admin/reservations.php` | `confirm`, `complete`, `cancel` (+ status filter) | `complete` books income (category `service`) |
+| `admin/store.php` (`tab=products`) | `create`, `toggle`, `stock` (`kind=purchase|waste|adjust`) | Stock never goes negative; every movement is journaled in `inventory_movements` |
+| `admin/store.php` (`tab=orders`) | `order_status` → `pending|paid|preparing|done|canceled` | `done` books income (`store`/`cafe`); `canceled` refunds wallet (wallet orders), restocks items and books an offsetting `return` movement |
+
 ## Errors
 
 Errors have `error` (user-facing message) and `code`.

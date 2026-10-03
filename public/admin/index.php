@@ -15,6 +15,8 @@ $canUsers = AdminAuth::can($admin, 'users.view');
 $canCrm = AdminAuth::can($admin, 'crm.view');
 $canSubs = AdminAuth::can($admin, 'memberships.view');
 $canFinance = AdminAuth::can($admin, 'finance.view');
+$canServices = AdminAuth::can($admin, 'services.view');
+$canStore = AdminAuth::can($admin, 'store.view');
 
 $stats = $pdo->query(
     'SELECT
@@ -32,7 +34,11 @@ $stats = $pdo->query(
         (SELECT COUNT(*) FROM subscriptions WHERE status = \'active\') AS active_subs,
         (SELECT COUNT(*) FROM subscriptions WHERE status = \'active\' AND expires_at IS NOT NULL AND expires_at >= ' . $now . ' AND expires_at < ' . ($now + 7 * 86400000) . ') AS expiring_subs,
         (SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE kind = \'income\' AND created_at >= ' . $monthStart . ') AS income_month,
-        (SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE kind = \'expense\' AND created_at >= ' . $monthStart . ') AS expense_month'
+        (SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE kind = \'expense\' AND created_at >= ' . $monthStart . ') AS expense_month,
+        ' . "(SELECT COUNT(*) FROM reservations WHERE status = 'pending') AS pending_res,
+        (SELECT COUNT(*) FROM reservations WHERE status = 'confirmed' AND reserved_at >= $now) AS upcoming_res,
+        (SELECT COUNT(*) FROM orders WHERE status IN ('pending', 'paid', 'preparing')) AS open_orders,
+        (SELECT COALESCE(SUM(amount),0) FROM finance_transactions WHERE kind = 'income' AND category IN ('store', 'cafe') AND created_at >= $monthStart) AS shop_income_month"
 )->fetch();
 
 $recentUsers = $canUsers ? $pdo->query(
@@ -60,6 +66,10 @@ $actionLabels = [
     'subscription_created' => ['ثبت اشتراک', 'green'], 'subscription_canceled' => ['لغو اشتراک', 'red'],
     'finance_added' => ['ثبت تراکنش مالی', 'amber'], 'wallet_adjusted' => ['تغییر کیف پول', 'amber'],
     'visit_logged' => ['ثبت تردد', 'green'],
+    'service_created' => ['ساخت خدمت', 'accent'], 'service_deactivated' => ['تغییر وضعیت خدمت', 'gray'],
+    'reservation_confirmed' => ['تأیید رزرو', 'green'], 'reservation_done' => ['انجام رزرو', 'green'], 'reservation_canceled' => ['لغو رزرو', 'red'],
+    'product_created' => ['افزودن محصول', 'accent'], 'product_deactivated' => ['تغییر وضعیت محصول', 'gray'], 'stock_adjusted' => ['تغییر موجودی', 'amber'],
+    'order_preparing' => ['آماده‌سازی سفارش', 'amber'], 'order_done' => ['تحویل سفارش', 'green'], 'order_canceled' => ['لغو سفارش', 'red'],
 ];
 $leadStatuses = ['new' => 'جدید', 'contacted' => 'تماس‌خورده', 'consult' => 'مشاوره', 'follow_up' => 'پیگیری', 'won' => 'عضو شد', 'lost' => 'منصرف'];
 
@@ -83,6 +93,19 @@ admin_header($admin, 'داشبورد', 'dashboard');
   <?php if ($canCrm): ?>
   <div class="stat accent"><div class="label">لیدهای جدید</div><div class="value num"><?= fa_num($stats['new_leads']) ?></div><div class="hint">از <?= fa_num($stats['total_leads']) ?> لید ثبت‌شده</div></div>
   <div class="stat"><div class="label">تبدیل به عضو</div><div class="value num"><?= fa_num($stats['won_leads']) ?></div><div class="hint">لیدهای موفق</div></div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php if ($canServices || $canStore): ?>
+<div class="grid cols-4" style="margin-top:16px">
+  <?php if ($canServices): ?>
+  <div class="stat amber"><div class="label">رزروهای در انتظار تأیید</div><div class="value num"><?= fa_num($stats['pending_res']) ?></div><div class="hint"><a href="reservations.php?status=pending">بررسی ←</a></div></div>
+  <div class="stat"><div class="label">نوبت‌های پیش‌رو</div><div class="value num"><?= fa_num($stats['upcoming_res']) ?></div><div class="hint">تأییدشده</div></div>
+  <?php endif; ?>
+  <?php if ($canStore): ?>
+  <div class="stat accent"><div class="label">سفارش‌های باز</div><div class="value num"><?= fa_num($stats['open_orders']) ?></div><div class="hint"><a href="store.php?tab=orders">پیگیری ←</a></div></div>
+  <div class="stat green"><div class="label">فروش فروشگاه و کافه (ماه)</div><div class="value num" style="font-size:19px"><?= fa_num(number_format((float) $stats['shop_income_month'])) ?></div><div class="hint">تومان</div></div>
   <?php endif; ?>
 </div>
 <?php endif; ?>

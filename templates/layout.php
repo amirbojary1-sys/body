@@ -72,6 +72,7 @@
   <nav class="secondary-nav">
     <a href="#agents" class="nav-item" data-view="agents"><svg class="icon"><use href="#i-spark"/></svg><span>تیم ایجنت‌ها</span><span class="tiny-tag">جدید</span></a>
     <button class="nav-item" data-action="calculator"><svg class="icon"><use href="#i-calculator"/></svg><span>محاسبه‌گر بدن</span></button>
+    <a class="nav-item" href="panel.php"><svg class="icon"><use href="#i-target"/></svg><span>پنل باشگاه</span><span class="tiny-tag">باشگاه</span></a>
   </nav>
   <div class="sidebar-bottom">
     <div class="personal-card"><span class="personal-symbol"><svg class="icon"><use href="#i-target"/></svg></span><h3>نقطه شروعِ بهتر تو</h3><p>برنامه‌ای بساز که برای بدن و سبک زندگی خودت باشه.</p><button class="btn btn-soft small full" data-action="planner">شخصی‌سازی برنامه <svg class="icon"><use href="#i-arrow"/></svg></button></div>

@@ -16,19 +16,22 @@ use PDO;
  */
 final class Rbac
 {
+    /** Bump when the default permission set of system roles changes (union-reapplied once). */
+    public const DEFAULTS_V = '2';
+
     /** System roles seeded on install (proposal §2). slug => [title, permissions|'*'] */
     public const SYSTEM_ROLES = [
         'ceo' => ['مدیرعامل', '*'],
-        'internal_manager' => ['مدیر داخلی', ['users.view', 'users.manage', 'crm.view', 'crm.manage', 'memberships.view', 'memberships.manage', 'branches.view', 'staff.view', 'staff.manage', 'roles.view', 'reports.view']],
-        'finance' => ['مالی و حسابداری', ['finance.view', 'finance.manage', 'memberships.view', 'reports.view']],
-        'head_coach' => ['سرمربی', ['users.view', 'memberships.view', 'reports.view']],
+        'internal_manager' => ['مدیر داخلی', ['users.view', 'users.manage', 'crm.view', 'crm.manage', 'memberships.view', 'memberships.manage', 'services.view', 'services.manage', 'store.view', 'store.manage', 'branches.view', 'staff.view', 'staff.manage', 'roles.view', 'reports.view']],
+        'finance' => ['مالی و حسابداری', ['finance.view', 'finance.manage', 'memberships.view', 'store.view', 'reports.view']],
+        'head_coach' => ['سرمربی', ['users.view', 'memberships.view', 'services.view', 'reports.view']],
         'coach' => ['مربی', ['users.view']],
         'hr' => ['منابع انسانی', ['staff.view', 'reports.view']],
-        'reception' => ['پذیرش', ['users.view', 'users.manage', 'crm.view', 'crm.manage', 'memberships.view', 'memberships.manage']],
+        'reception' => ['پذیرش', ['users.view', 'users.manage', 'crm.view', 'crm.manage', 'memberships.view', 'memberships.manage', 'services.view', 'services.manage']],
         'crm_operator' => ['اپراتور CRM', ['crm.view', 'crm.manage']],
-        'warehouse' => ['انباردار', []],
-        'cafe_manager' => ['مسئول کافه', []],
-        'store_manager' => ['مسئول فروشگاه', []],
+        'warehouse' => ['انباردار', ['store.view', 'store.manage']],
+        'cafe_manager' => ['مسئول کافه', ['store.view', 'store.manage']],
+        'store_manager' => ['مسئول فروشگاه', ['store.view', 'store.manage']],
         'salon_manager' => ['مسئول آرایشگاه', []],
         'massage_manager' => ['مسئول ماساژ', []],
         'member' => ['عضو', []],
@@ -67,6 +70,14 @@ final class Rbac
                 'staff.view' => 'مشاهده کارکنان',
                 'staff.manage' => 'مدیریت کارکنان و حساب‌های پنل',
             ]],
+            'services' => ['title' => 'خدمات و رزرو', 'perms' => [
+                'services.view' => 'مشاهده خدمات و رزروها',
+                'services.manage' => 'مدیریت خدمات، تأیید و لغو رزرو',
+            ]],
+            'store' => ['title' => 'فروشگاه و کافه', 'perms' => [
+                'store.view' => 'مشاهده محصولات و سفارش‌ها',
+                'store.manage' => 'مدیریت محصولات، موجودی و سفارش‌ها',
+            ]],
             'reports' => ['title' => 'گزارش‌ها', 'perms' => [
                 'reports.view' => 'مشاهده گزارش فعالیت و آمار',
             ]],
@@ -101,6 +112,26 @@ final class Rbac
             if ((int) $row['perms_seeded'] === 1) continue; // keep manager customizations
             self::syncPermissions((int) $row['id'], $perms === '*' ? self::permissionCodes() : $perms, $pdo);
             $pdo->prepare('UPDATE roles SET perms_seeded = 1 WHERE id = ?')->execute([(int) $row['id']]);
+        }
+        // When DEFAULTS_V changes, newly added default permissions are merged into system
+        // roles once (union only) so existing manager customizations survive.
+        if (Platform::metaGet($pdo, 'rbac_defaults_v') !== self::DEFAULTS_V) {
+            foreach (self::SYSTEM_ROLES as $slug => [, $perms]) {
+                $stmt = $pdo->prepare('SELECT id FROM roles WHERE slug = ?');
+                $stmt->execute([$slug]);
+                $roleId = $stmt->fetchColumn();
+                if ($roleId === false) continue;
+                $roleId = (int) $roleId;
+                $stmt = $pdo->prepare('SELECT permission FROM role_permissions WHERE role_id = ?');
+                $stmt->execute([$roleId]);
+                $existing = [];
+                foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $code) $existing[$code] = true;
+                $insert = $pdo->prepare('INSERT INTO role_permissions(role_id, permission) VALUES(?, ?)');
+                foreach ($perms === '*' ? self::permissionCodes() : $perms as $code) {
+                    if (!isset($existing[$code])) $insert->execute([$roleId, $code]);
+                }
+            }
+            Platform::metaSet($pdo, 'rbac_defaults_v', self::DEFAULTS_V);
         }
     }
 
